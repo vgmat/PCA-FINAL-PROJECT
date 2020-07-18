@@ -1,0 +1,175 @@
+---
+title: "PCA FINAL PROJECT MURUGA"
+author: "Dr.V.Gnanaraj"
+date: "7/14/2020"
+output: html_document
+---
+##Background
+
+#Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data Source 
+The training data for this project are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+
+The test data are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+###PART I Loading the required Dataset and Packages
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+```
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+```{r}
+library(rattle)
+library(randomForest)
+```
+```{r}
+library(gbm)
+
+```
+```{r}
+train_set <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_set  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+```
+#Initialization of Data
+```{r}
+init_org_training_data <- read.csv(url(train_set))
+init_org_testing_data <- read.csv(url(test_set))
+
+dim(init_org_training_data)
+```
+```{r}
+dim(init_org_testing_data)
+```
+
+###PART II DATA PFREPARATION
+##STEP I Removing Variables that are having nearly zero variance.
+```{r}
+rm_non_zero_var <- nearZeroVar(init_org_training_data)
+
+
+org_training_data <- init_org_training_data[,-rm_non_zero_var]
+org_testing_data <- init_org_testing_data[,-rm_non_zero_var]
+
+dim(org_training_data)
+```
+```{r}
+dim(org_testing_data)
+```
+##STEP II Removing Variables that are having NA values with threshhold value of 95%
+```{r}
+rm_na_val <- sapply(org_training_data, function(x) mean(is.na(x))) > 0.95
+
+org_training_data <- org_training_data[,rm_na_val == FALSE]
+org_testing_data <- org_testing_data[,rm_na_val == FALSE]
+
+dim(org_training_data)
+```
+```{r}
+dim(org_testing_data)
+```
+##STEP III C. Removing non-numeric variables 
+#The very first 7 variables are of that kind only. Hence those needs to be removed from the datasets.
+```{r}
+org_training_data <- org_training_data[,8:59]
+org_testing_data <- org_testing_data[,8:59]
+
+dim(org_training_data)
+```
+```{r}
+dim(org_testing_data)
+colnames(org_training_data)
+```
+```{r}
+colnames(org_testing_data)
+```
+###PART III DATA PARTITIONING
+#As per recommendation of the course Practical Machine Learning, we will be splitting our org_training_data into 2 different parts, one is the training set (consisiting 60% of the total data) and test set (consisting 40% of the total data)
+```{r}
+inTrain <- createDataPartition(org_training_data$classe, p=0.6, list=FALSE)
+training <- org_training_data[inTrain,]
+testing <- org_training_data[-inTrain,]
+
+dim(training)
+
+```
+
+```{r}
+dim(testing)
+```
+###MODEL I ML Algorithm - Decision Tree
+```{r}
+MLA_DT_modfit <- train(classe ~ ., data = training, method="rpart")
+MLA_DT_predict <- predict(MLA_DT_modfit, testing)
+confusionMatrix(MLA_DT_predict, testing$classe)
+```
+
+```{r}
+rpart.plot(MLA_DT_modfit$finalModel, roundint = FALSE)
+
+```
+# It is observed that the prediction accuracy is 50% which is not upto the desired level. So we try to use other ML Models
+
+###MODEL II ML Algorithm - Random Forest
+
+```{r}
+MLA_RF_modfit <- train(classe ~ ., data = training, method = "rf", ntree = 100)
+MLA_RF_predict <- predict(MLA_RF_modfit, testing)
+MLA_RF_pred_conf <- confusionMatrix(MLA_RF_predict, testing$classe)
+MLA_RF_pred_conf
+```
+#Next we plot Random Forest Accuaracy level
+```{r}
+plot(MLA_RF_pred_conf$table, col = MLA_RF_pred_conf$byClass, 
+     main = paste("Random Forest - Accuracy Level =",
+                  round(MLA_RF_pred_conf$overall['Accuracy'], 4)))
+```
+#From the Confusion Matrix, it is observed that that the prediction accuracy of Random Forest model is 99% which is satisfactory.
+###MODEL III Gradient Boosting Model
+```{r}
+GBM_modfit <- train(classe ~ ., data = training, method = "gbm", verbose = FALSE)
+GBM_modfit$finalModel
+```
+#Prediction using GBM Model
+```{r}
+GBM_prediction <- predict(GBM_modfit, testing)
+
+GBM_pred_conf <- confusionMatrix(GBM_prediction, testing$classe)
+GBM_pred_conf
+```
+#Next let us plot the Accuracy Level using GBM Method
+```{r}
+plot(GBM_pred_conf$table, col = GBM_pred_conf$byClass, 
+     main = paste("Gradient Boosting - Accuracy Level =",
+                  round(GBM_pred_conf$overall['Accuracy'], 4)))
+```
+
+#It is observed that in the Gradient Boost Model, the prediction accuracy is 95% which is satisfactory.
+
+##Comparision of Forest and Gradient Boosting models
+
+```{r}
+MLA_RF_pred_conf$overall
+```
+
+```{r}
+GBM_pred_conf$overall
+```
+
+##Final Prediction- Applying selected model on the Test Data
+```{r}
+Final_RF_prediction <- predict(MLA_RF_modfit, org_testing_data )
+Final_RF_prediction
+```
+##Conclusion
+#After checking the Overall Statistics data, the Random Forest model has definitely more accuracy than GBM. Hence we will be selecting Random Forest model for final prediction from org_testing_data .
